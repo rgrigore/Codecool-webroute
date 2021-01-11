@@ -1,6 +1,11 @@
 package com.codecool.webroute;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+
 import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
@@ -8,15 +13,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-
 public class Main {
 
     private static final Routes ROUTES = new Routes();
     private static final Map<String, Method> getRoutes = new HashMap<>();
-    private static final Map<String, Method> setRoutes = new HashMap<>();
+    private static final Map<String, Method> postRoutes = new HashMap<>();
 
     public static void main(String[] args) throws Exception {
         mapRoutes();
@@ -33,7 +34,7 @@ public class Main {
                 WebRoute webRoute = method.getAnnotation(WebRoute.class);
                 switch (webRoute.method()) {
                     case GET: getRoutes.put(webRoute.route(), method); break;
-                    case SET: setRoutes.put(webRoute.route(), method); break;
+                    case POST: postRoutes.put(webRoute.route(), method); break;
                     default: System.out.printf("Unknown method <%s>%n", webRoute.method());
                 }
             }
@@ -43,8 +44,8 @@ public class Main {
     private static Map<String, Method> selectRoutes(String requestMethod) {
         if (WebRoute.Methods.GET.equals(requestMethod)) {
             return getRoutes;
-        } else if (WebRoute.Methods.SET.equals(requestMethod)) {
-            return setRoutes;
+        } else if (WebRoute.Methods.POST.equals(requestMethod)) {
+            return postRoutes;
         }
 
         return null;
@@ -58,8 +59,13 @@ public class Main {
 
             routes.ifPresent(map -> {
                 try {
-                    map.get(t.getRequestURI().toString()).invoke(ROUTES, t);
-                } catch (IllegalAccessException | InvocationTargetException e) {
+                    String response = (String) map.get(t.getRequestURI().toString()).invoke(ROUTES);
+
+                    t.sendResponseHeaders(200, response.length());
+                    OutputStream os = t.getResponseBody();
+                    os.write(response.getBytes());
+                    os.close();
+                } catch (IllegalAccessException | InvocationTargetException | IOException e) {
                     e.printStackTrace();
                 }
             });
